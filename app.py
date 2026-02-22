@@ -70,4 +70,5 @@ st.sidebar.markdown(f"""
 * АИ-95: {FUEL_PRICES['АИ-95']} руб.
 * Дизель: {FUEL_PRICES['Дизель']} руб.
 * Электричество: {ELECTRO_PRICE} руб.
+
 """)
