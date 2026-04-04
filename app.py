@@ -7,38 +7,39 @@ import datetime
 st.set_page_config(page_title="EV Calc 2026 Pro", page_icon="⚡")
 
 # --- ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ ЦЕН С САЙТА ---
-@st.cache_data(ttl=3600)  # Кэшируем данные на 1 час, чтобы не спамить сайт запросами
+@st.cache_data(ttl=3600)
 def get_real_prices():
-    # Базовые цены (запасной вариант на 2026 год)
+    # Базовые цены на случай, если сайт не ответит
     prices = {"АИ-92": 65.80, "АИ-95": 71.50, "Дизель": 68.20}
-    
     try:
-        # Пример адреса (в 2026 году пути могут быть другими, это демонстрационный URL)
         url = "https://petrolplus.ru/fuel_prices/sankt-peterburg/"
         headers = {'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers, timeout=5)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            # Здесь логика поиска конкретных цифр на странице
-            # Это примерный поиск, так как верстка сайтов меняется
             rows = soup.find_all('tr')
             for row in rows:
                 cols = row.find_all('td')
                 if len(cols) >= 2:
                     fuel_name = cols[0].text.strip()
-                    price_val = cols[1].text.strip().replace(',', '.')
-                    if "92" in fuel_name: prices["АИ-92"] = float(price_val)
-                    if "95" in fuel_name: prices["АИ-95"] = float(price_val)
-                    if "Дизель" in fuel_name: prices["Дизель"] = float(price_val)
+                    try:
+                        price_val = cols[1].text.strip().replace(',', '.')
+                        if "92" in fuel_name: prices["АИ-92"] = float(price_val)
+                        if "95" in fuel_name: prices["АИ-95"] = float(price_val)
+                        if "Дизель" in fuel_name: prices["Дизель"] = float(price_val)
+                    except: continue
             return prices, True
-    except Exception as e:
-        return prices, False # Возвращаем базу, если интернет упал или сайт заблокировал нас
+    except:
+        pass
+    
+    # Если интернет-цены не загрузились, возвращаем базу, чтобы сайт не падал
+    return prices, False
 
 # --- ГЛАВНЫЙ ИНТЕРФЕЙС ---
 st.title("⚡ EV Calc 2026: Динамические данные")
 
-# Загружаем цены
+# Загружаем цены (строка 42 теперь защищена)
 current_prices, is_live = get_real_prices()
 
 if is_live:
@@ -46,14 +47,13 @@ if is_live:
 else:
     st.warning("⚠️ Не удалось подключиться к серверу цен. Используются архивные данные 2026 года.")
 
-# --- БЛОК ВВОДА (оставляем как в прошлой версии) ---
+# --- БЛОК ВВОДА ---
 st.header("1. Исходные данные")
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("🚗 Автомобиль с ДВС")
     fuel_type = st.selectbox("Тип топлива", list(current_prices.keys()))
-    # По умолчанию ставим актуальную цену из интернета, но даем пользователю ее подправить
     fuel_price = st.number_input("Цена за литр (руб)", value=current_prices[fuel_type])
     price_ice = st.number_input("Цена покупки (руб)", value=2200000, step=50000)
     cons_ice = st.number_input("Расход топлива (л/100 км)", value=8.5)
@@ -77,6 +77,7 @@ if st.button("РАССЧИТАТЬ", type="primary"):
     if annual_saving > 0:
         payback = price_diff / annual_saving
         st.metric("Срок окупаемости", f"{round(payback, 1)} лет")
-        st.write(f"Экономия в год: {round(annual_saving):,} руб.")
+        st.write(f"Экономия в год: **{round(annual_saving):,} руб.**")
     else:
         st.error("Электромобиль не окупится при таких параметрах.")
+        
