@@ -4,36 +4,49 @@ from bs4 import BeautifulSoup
 import datetime
 import re
 
-# 1. Настройка страницы (мягкая тема)
+# --- НАСТРОЙКА СТРАНИЦЫ ---
 st.set_page_config(page_title="EV Calc 2026 Pro", page_icon="⚡", layout="centered")
 
-# 2. Функция получения цен (максимальная защита)
+# --- ФУНКЦИЯ ПОЛУЧЕНИЯ ЦЕН С МАКСИМАЛЬНОЙ МАСКИРОВКОЙ ---
 @st.cache_data(ttl=3600)
 def get_fuel_prices():
-    # Базовые цены 2026 года для СПб
+    # Наша надежная база данных на случай блокировки
     prices = {"АИ-92": 65.80, "АИ-95": 71.50, "Дизель": 68.20}
     status = False
     
     try:
-        # Пробуем получить данные с сайта мониторинга
-        url = "https://fuelprices.ru/st-petersburg"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.get(url, headers=headers, timeout=5)
+        url = "https://www.benzin-price.ru/price_fuel.php?region_id=78"
+        
+        # Мощная имитация реального пользователя (чтобы обойти защиту)
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8',
+            'Referer': 'https://yandex.ru/'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=8)
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            tds = soup.find_all('td')
-            for i in range(len(tds)):
-                text = tds[i].get_text()
-                if "95" in text and i+1 < len(tds):
-                    val = tds[i+1].get_text().strip().replace(',', '.')
-                    prices["АИ-95"] = float(re.findall(r"\d+\.\d+", val)[0])
-                if "92" in text and i+1 < len(tds):
-                    val = tds[i+1].get_text().strip().replace(',', '.')
-                    prices["АИ-92"] = float(re.findall(r"\d+\.\d+", val)[0])
-            status = True
+            page_text = soup.get_text()
+            
+            # Ищем цены с помощью умного поиска (регулярные выражения)
+            match_95 = re.search(r'95.*?(\d{2}[\.,]\d{2})', page_text)
+            match_92 = re.search(r'92.*?(\d{2}[\.,]\d{2})', page_text)
+            match_dt = re.search(r'Дизель.*?(\d{2}[\.,]\d{2})', page_text)
+            
+            if match_95:
+                prices["АИ-95"] = float(match_95.group(1).replace(',', '.'))
+                status = True
+            if match_92:
+                prices["АИ-92"] = float(match_92.group(1).replace(',', '.'))
+                status = True
+            if match_dt:
+                prices["Дизель"] = float(match_dt.group(1).replace(',', '.'))
     except:
-        pass # При любой ошибке просто используем базу
+        pass # Если сайт заблокировал сервер Streamlit, просто идем дальше
+    
     return prices, status
 
 # --- ИНТЕРФЕЙС ---
@@ -41,7 +54,7 @@ st.title("⚡ Экономика электромобиля 2026")
 
 current_prices, is_live = get_fuel_prices()
 
-# Плашка статуса (профессиональный стиль)
+# Плашка статуса
 if is_live:
     st.success(f"✅ Цены обновлены автоматически ({datetime.date.today().strftime('%d.%m.%Y')})")
 else:
@@ -49,7 +62,7 @@ else:
 
 st.divider()
 
-# 3. Ввод данных в две колонки
+# --- ВВОД ДАННЫХ ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -61,14 +74,13 @@ with col1:
 
 with col2:
     st.subheader("🔋 Электромобиль")
-    # Тариф 2026 года (ночной/день усредненный)
     elec_price = st.number_input("Тариф за кВт⋅ч (₽)", value=3.85, step=0.1)
     price_ev = st.number_input("Стоимость ЭД (₽)", value=3600000, step=50000)
     cons_ev = st.number_input("Расход (кВт⋅ч/100 км)", value=18.0, step=1.0)
 
-st.write("") # Отступ
+st.write("")
 
-# 4. ТОТ САМЫЙ УДОБНЫЙ ПОЛЗУНОК ПРОБЕГА
+# --- ПОЛЗУНОК ПРОБЕГА ---
 st.subheader("🛣️ Ваша эксплуатация")
 annual_km = st.select_slider(
     "Средний годовой пробег (километров)",
@@ -79,20 +91,17 @@ annual_km = st.select_slider(
 
 st.divider()
 
-# 5. Расчетная логика
+# --- ЛОГИКА РАСЧЕТА ---
 if st.button("РАССЧИТАТЬ ОКУПАЕМОСТЬ", type="primary", use_container_width=True):
-    # Стоимость 1 км пути
     cost_1km_ice = (cons_ice / 100) * fuel_price
     cost_1km_ev = (cons_ev / 100) * elec_price
     
-    # Экономия
     annual_saving = (cost_1km_ice - cost_1km_ev) * annual_km
     price_diff = price_ev - price_ice
     
     if annual_saving > 0:
         payback_years = price_diff / annual_saving
         
-        # Красивый вывод результата
         c1, c2 = st.columns(2)
         with c1:
             st.metric("Срок окупаемости", f"{round(payback_years, 1)} лет")
