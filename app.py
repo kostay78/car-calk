@@ -7,17 +7,14 @@ import re
 # --- НАСТРОЙКА СТРАНИЦЫ ---
 st.set_page_config(page_title="EV Calc 2026 Pro", page_icon="⚡", layout="centered")
 
-# --- ФУНКЦИЯ ПОЛУЧЕНИЯ ЦЕН С МАКСИМАЛЬНОЙ МАСКИРОВКОЙ ---
+# --- ФУНКЦИЯ ПОЛУЧЕНИЯ ЦЕН ---
 @st.cache_data(ttl=3600)
 def get_fuel_prices():
-    # Наша надежная база данных на случай блокировки
     prices = {"АИ-92": 65.80, "АИ-95": 71.50, "Дизель": 68.20}
     status = False
     
     try:
         url = "https://www.benzin-price.ru/price_fuel.php?region_id=78"
-        
-        # Мощная имитация реального пользователя (чтобы обойти защиту)
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -31,7 +28,6 @@ def get_fuel_prices():
             soup = BeautifulSoup(response.text, 'html.parser')
             page_text = soup.get_text()
             
-            # Ищем цены с помощью умного поиска (регулярные выражения)
             match_95 = re.search(r'95.*?(\d{2}[\.,]\d{2})', page_text)
             match_92 = re.search(r'92.*?(\d{2}[\.,]\d{2})', page_text)
             match_dt = re.search(r'Дизель.*?(\d{2}[\.,]\d{2})', page_text)
@@ -45,7 +41,7 @@ def get_fuel_prices():
             if match_dt:
                 prices["Дизель"] = float(match_dt.group(1).replace(',', '.'))
     except:
-        pass # Если сайт заблокировал сервер Streamlit, просто идем дальше
+        pass 
     
     return prices, status
 
@@ -80,13 +76,15 @@ with col2:
 
 st.write("")
 
-# --- ПОЛЗУНОК ПРОБЕГА ---
+# --- ПЛАВНЫЙ ПОЛЗУНОК ПРОБЕГА ---
 st.subheader("🛣️ Ваша эксплуатация")
-annual_km = st.select_slider(
+annual_km = st.slider(
     "Средний годовой пробег (километров)",
-    options=[5000, 10000, 15000, 20000, 25000, 30000, 40000, 50000, 75000, 100000],
+    min_value=5000,
+    max_value=100000,
     value=20000,
-    help="Выберите наиболее близкое к вашему стилю езды значение"
+    step=500,
+    help="Потяните ползунок, чтобы выбрать ваш примерный пробег за год"
 )
 
 st.divider()
